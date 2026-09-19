@@ -93,6 +93,20 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
+  // 일정·숙소 데이터와 화면 코드는 온라인일 때 최신본을 우선한다.
+  if (/\.(?:js|css)$/.test(url.pathname)) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => caches.match(req, { ignoreSearch: true }))
+    );
+    return;
+  }
+
   // 큰 사진: 온라인이면 받아서 보관, 끊기면 보관본 → 없으면 폰용 작은 사진으로 대체
   if (/\/img\/.+-L\.webp$/.test(url.pathname)) {
     e.respondWith(
