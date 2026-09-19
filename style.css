@@ -95,7 +95,7 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round
 
 /* ── 상단 바 ─────────────────────────────── */
 .bar {
-  position: fixed; inset: 0 0 auto 0; height: var(--bar-h); z-index: 20;
+  position: fixed; inset: 0 0 auto 0; height: calc(var(--bar-h) + env(safe-area-inset-top)); z-index: 20;
   display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px;
   padding-top: env(safe-area-inset-top);
   background: color-mix(in oklab, var(--paper) 88%, transparent);
@@ -146,6 +146,14 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round
   overscroll-behavior-y: contain; position: relative;
 }
 .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+
+@media (max-width: 699px) {
+  :root { --bar-h: 56px; }
+  .bar { gap: 6px; padding-right: 8px; padding-left: 8px; }
+  .chips { gap: 5px; }
+  .chip { min-width: 40px; min-height: 40px; padding: 8px 10px; }
+  .nav-btn { width: 42px; height: 42px; }
+}
 
 /* ── 공통 타이포 ─────────────────────────── */
 .eyebrow {
@@ -306,6 +314,9 @@ svg { stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round
   .day { grid-template-columns: minmax(380px, 44%) 1fr; }
   .day-photo { position: sticky; top: 0; height: calc(100svh - var(--bar-h)); min-height: 0; }
   .day-body { padding: 40px 44px 80px; margin: 0; max-width: 720px; }
+}
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 999px) {
+  .day-photo { height: 55svh; min-height: 180px; }
 }
 
 /* 동선 스트립 (아이콘 타임라인) */
