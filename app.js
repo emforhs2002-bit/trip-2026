@@ -4,6 +4,8 @@
 (() => {
   "use strict";
   const T = window.TRIP, P = window.PHOTOS, M = window.MAP, PL = window.PLACES;
+  const SPOTS = window.MAP_SPOTS || [], NEARBY = window.NEARBY_PLACES || [];
+  const EXTRAS = window.EXTRA_PLACES_BY_DAY || {};
   const $ = (s, el = document) => el.querySelector(s);
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -36,6 +38,7 @@
     arrow: '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/>',
     out: '<path d="M7 17 17 7"/><path d="M8 7h9v9"/>',
     down: '<path d="m6 9 6 6 6-6"/>',
+    refresh: '<path d="M20 11a8 8 0 1 0 1.3 4.4"/><path d="M20 4v7h-7"/>',
   };
   const ic = (n) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ICONS.pin}</svg>`;
 
@@ -44,6 +47,38 @@
     melbourne: "멜버른", saigon: "호치민 경유", home: "귀국",
   };
   const DOW_EN = { 월: "MON", 화: "TUE", 수: "WED", 목: "THU", 금: "FRI", 토: "SAT", 일: "SUN" };
+
+  /* ── Google Maps 연결 ─────────────────────── */
+  function spotForText(text) {
+    const hay = String(text || "").toLocaleLowerCase("ko");
+    let found = null, score = 0;
+    SPOTS.forEach((spot) => (spot.aliases || [spot.name]).forEach((alias) => {
+      const needle = String(alias).toLocaleLowerCase("ko");
+      if (needle.length > score && hay.includes(needle)) { found = spot; score = needle.length; }
+    }));
+    return found;
+  }
+  const mapSearchURL = (spot) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(spot.query || spot.name)}`;
+  function mapURL(text, tip = "", moving = false) {
+    if (!moving) {
+      const spot = spotForText(text);
+      return spot ? mapSearchURL(spot) : "";
+    }
+    const parts = String(text).split("→").map((s) => s.trim()).filter(Boolean);
+    const origin = spotForText(parts[0]);
+    const destination = spotForText(parts.at(-1));
+    if (!destination) return "";
+    const modeText = `${text} ${tip}`;
+    const mode = /도보/.test(modeText) && !/트램|메트로|경전철|버스|전철|대중교통/.test(modeText)
+      ? "walking" : /트램|메트로|경전철|버스|전철|대중교통/.test(modeText) ? "transit" : "driving";
+    const from = origin ? `&origin=${encodeURIComponent(origin.query || origin.name)}` : "";
+    return `https://www.google.com/maps/dir/?api=1${from}&destination=${encodeURIComponent(destination.query || destination.name)}&travelmode=${mode}`;
+  }
+  function mapText(text, href, cls = "map-inline") {
+    return href
+      ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener" aria-label="${esc(text)} 지도에서 보기"><span>${esc(text)}</span>${ic("out")}</a>`
+      : esc(text);
+  }
 
   /* ── 사진 ─────────────────────────────────── */
   function img(id, sizes, eager) {
@@ -148,9 +183,8 @@
   // 한눈에
   const regionsUsed = [...new Set(T.days.map((d) => d.region))];
   add("overview", "지도", "sydney", `<div class="wrap">
-    <p class="eyebrow">Route · 11 days</p>
-    <h2 class="h-page">한눈에 보는 11일</h2>
-    <p class="lead">시드니에서 블루마운틴을 넘고 남쪽 해안을 따라 내려가 멜버른까지. 마지막 이틀은 호치민을 거쳐 인천으로 돌아온다.</p>
+    <h2 class="h-page">11일 여행 한눈에 보기</h2>
+    <p class="lead">시드니와 블루마운틴을 둘러본 뒤 남쪽 해안을 따라 멜버른으로 이동합니다. 귀국길에는 호치민에서 하루를 보냅니다.</p>
     <div class="overview-grid">
       <div class="map-box">${mapHTML(null)}
         <div class="map-legend">${regionsUsed.filter((r) => !["saigon", "home"].includes(r)).map((r) => `<span class="r-${r}"><i></i>${REGION[r]}</span>`).join("")}<span><b class="md-key"></b>숙박지</span></div>
@@ -161,29 +195,43 @@
     </div></div>`);
 
   // 날짜별
-  const PILL = { "바로 가기": "go", "시간 남으면": "maybe", "줄 길면 패스": "skip", "저녁 후보": "dinner", "예약 완료": "booked" };
   const moveIcon = (s) => /도보/.test(s) && !/트램|메트로|경전철|버스/.test(s) ? "walk" : /페리/.test(s) ? "ferry" : /메트로|전철|경전철|트램|버스|대중교통/.test(s) ? "train" : "car";
   const [monthOf, dayOf] = [(d) => d.date.split(".")[0], (d) => d.date.split(".")[1]];
 
   T.days.forEach((d) => {
     const photos = d.photos.filter((id) => P[id]);
     const heroP = P[d.hero];
+    const staySpot = spotForText(d.stay);
     const stats = `<div class="gsign">
       ${d.roads ? `<div class="gsign-roads">${d.roads.map(([no, nm]) => `<span class="road"><span class="shield">${no}</span>${esc(nm)}</span>`).join("")}</div>` : ""}
       <dl class="gsign-rows">${d.stats.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl></div>`;
-    const route = `<ol class="route">${d.highlights.map(([t, i, n]) => `<li><span class="ic">${ic(i)}</span><span class="t">${esc(t)}</span><span class="n">${esc(n)}</span></li>`).join("")}</ol>`;
+    const route = `<ol class="route">${d.highlights.map(([t, i, n]) => {
+      const href = mapURL(n);
+      return `<li><span class="ic">${ic(i)}</span><span class="t">${esc(t)}</span><span class="n">${mapText(n, href, "route-map")}</span></li>`;
+    }).join("")}</ol>`;
     const mosaic = photos.length ? `<section class="sec"><h3 class="sec-h">미리 보는 풍경</h3><div class="mosaic">${photos.map((id, k) =>
       `<figure>${img(id, k === 0 ? "(min-width:1000px) 640px, 100vw" : "(min-width:1000px) 320px, 50vw")}<figcaption>${esc(P[id].name)}</figcaption></figure>`).join("")}</div></section>` : "";
-    const mini = d.path && d.path.length > 2 ? `<section class="sec"><h3 class="sec-h">오늘 달리는 길 <small>대략적인 경로</small></h3><div class="minimap">${mapHTML(d)}</div></section>` : "";
+    const mini = d.path && d.path.length > 2 ? `<section class="sec"><h3 class="sec-h">이동 경로 <small>예상 경로</small></h3><div class="minimap">${mapHTML(d)}</div></section>` : "";
     const feat = d.feature ? `<section class="sec"><div class="feature"><h4>${esc(d.feature.title)}</h4><p class="sub">${esc(d.feature.sub)}</p>
       <ol class="steps">${d.feature.steps.map(([i, t, s], k) => `<li><div class="top"><span class="no">${k + 1}</span>${esc(t)}${ic(i)}</div><p>${esc(s)}</p></li>`).join("")}</ol>
       ${d.feature.foot ? `<p class="foot">${esc(d.feature.foot)}</p>` : ""}</div></section>` : "";
-    const eats = d.eats.length ? `<section class="sec"><h3 class="sec-h">근처에서 골라 가기 <small>누르면 지도</small></h3><ul class="eats">${d.eats.map(([k, n, m, w, u]) =>
-      `<li><a href="${esc(u)}" target="_blank" rel="noopener"><span class="pill ${PILL[k] || "maybe"}">${esc(k)}</span><span class="e-name">${esc(n)} <span class="e-menu">· ${esc(m)}</span></span>${ic("out").replace("<svg", '<svg class="out"')}<span class="e-when">${esc(w)}</span></a></li>`).join("")}</ul></section>` : "";
-    const notes = d.notes.length ? `<section class="sec"><h3 class="sec-h">기억할 것</h3><ul class="notes">${d.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul></section>` : "";
-    const sched = `<section class="sec"><details class="sched"><summary>상세 시간표 <small>${d.schedule.filter((r) => r[0] !== "→").length}개 일정</small>${ic("down")}</summary><ol class="tt">${d.schedule.map(([t, w, tip]) => t === "→"
-      ? `<li class="mv"><span class="tm">${ic(moveIcon(w + tip))}</span><span class="wh">${esc(w)}</span><span class="tp">${esc(tip)}</span></li>`
-      : `<li><span class="tm">${esc(t)}</span><span class="wh">${esc(w)}</span><span class="tp">${esc(tip)}</span></li>`).join("")}</ol></details></section>`;
+    const extras = (EXTRAS[d.n] || []).length ? `<div class="day-extras">
+      <h4>이런 곳도 있어요</h4>
+      <ul>${EXTRAS[d.n].map((place) => `<li><a href="${esc(mapSearchURL(place))}" target="_blank" rel="noopener"><span>${esc(place.name)}</span>${ic("out")}</a><p>${esc(place.note)}</p></li>`).join("")}</ul>
+    </div>` : "";
+    const nearby = `<section class="sec nearby" data-nearby>
+      <div class="nearby-heading"><h3 class="sec-h">유명 맛집·가볼 만한 곳 <small>현재 위치에서 1km 이내</small></h3>
+        <button class="nearby-refresh" type="button" data-nearby-refresh aria-label="현재 위치 다시 확인" title="현재 위치 다시 확인">${ic("refresh")}</button></div>
+      <p class="nearby-status" data-nearby-status role="status">버튼을 누를 때만 현재 위치를 확인하며, 1km 이내의 장소를 가까운 순으로 표시합니다.</p>
+      <ul class="nearby-list" data-nearby-list hidden></ul>
+      ${extras}
+    </section>`;
+    const sched = `<section class="sec"><details class="sched"><summary>상세 일정 <small>${d.schedule.filter((r) => r[0] !== "→").length}개 일정</small>${ic("down")}</summary><ol class="tt">${d.schedule.map(([t, w, tip]) => {
+      const moving = t === "→", href = mapURL(w, tip, moving);
+      return moving
+        ? `<li class="mv"><span class="tm">${ic(moveIcon(w + tip))}</span><span class="wh">${mapText(w, href)}</span><span class="tp">${esc(tip)}</span></li>`
+        : `<li><span class="tm">${esc(t)}</span><span class="wh">${mapText(w, href)}</span><span class="tp">${esc(tip)}</span></li>`;
+    }).join("")}</ol></details></section>`;
     const links = d.links ? `<section class="sec"><h3 class="sec-h">공식 안내</h3><div class="links">${d.links.map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}${ic("out")}</a>`).join("")}</div></section>` : "";
 
     add(`day${d.n}`, `D${d.n}`, d.region, `<article class="day">
@@ -195,17 +243,17 @@
       <div class="day-body">
         <p class="eyebrow">${monthOf(d)}월 ${dayOf(d)}일 ${d.dow}요일</p>
         <h2 class="day-title">${esc(d.title)}</h2>
-        <p class="stay">${ic("hotel")}<span>오늘 밤 · <b>${esc(d.stay)}</b></span></p>
+        <p class="stay">${ic("hotel")}<span>오늘 밤 · ${mapText(d.stay, staySpot ? mapSearchURL(staySpot) : "", "stay-map")}</span></p>
         <div class="day-top">${d.warn ? `<div class="warn"><span class="diamond"><span>!</span></span>${esc(d.warn)}</div>` : ""}${stats}</div>
-        <section class="sec"><h3 class="sec-h">오늘의 동선 <small>핵심 ${d.highlights.length}곳</small></h3>${route}</section>
-        ${mosaic}${mini}${feat}${eats}${notes}${sched}${links}
+        <section class="sec"><h3 class="sec-h">주요 일정 <small>${d.highlights.length}곳</small></h3>${route}</section>
+        ${mosaic}${mini}${feat}${nearby}${sched}${links}
       </div></article>`);
   });
 
   // 숙소
   add("stays", "숙소", "home", `<div class="wrap">
-    <p class="eyebrow">Stays</p><h2 class="h-page">숙소만 한눈에</h2>
-    <p class="lead">시드니부터 아폴로 베이까지는 예약 완료. 멜버른만 아직 예약 전이다.</p>
+    <h2 class="h-page">숙소 한눈에 보기</h2>
+    <p class="lead">시드니부터 멜버른까지 전 일정 숙소 예약 완료.</p>
     <ul class="stays">${T.stays.map(([dt, nm, ad, memo, st]) => `<li>
       <div class="sd"><span class="dates">${esc(dt)}</span><span class="status ${st}">${st === "done" ? "예약 완료" : "예약 전"}</span></div>
       <h3>${esc(nm)}</h3><span class="addr">${esc(ad)}</span><span class="memo">${esc(memo)}</span>
@@ -214,18 +262,18 @@
   // 준비
   const groups = [...new Set(T.checklist.map((c) => c[0]))];
   add("prep", "준비", "home", `<div class="wrap">
-    <p class="eyebrow">Before you go</p><h2 class="h-page">출발 전 체크리스트</h2>
-    <p class="lead">체크한 항목은 이 기기에 저장된다.</p>
+    <h2 class="h-page">출발 전 체크리스트</h2>
+    <p class="lead">체크한 항목은 현재 기기에만 저장됩니다.</p>
     ${groups.map((g) => `<div class="check-group"><h3><span class="shield">${g.replace("순위", "")}</span>${g}</h3><ul class="checks">${T.checklist.map((c, i) => c[0] !== g ? "" :
       `<li><label><input type="checkbox" data-ck="${i}"><span class="k">${esc(c[1])}</span><span class="x">${esc(c[2])}</span></label></li>`).join("")}</ul></div>`).join("")}
-    <section class="sec"><h3 class="sec-h">날짜별로 꼭 기억할 것</h3><ul class="remember">${T.remember.map(([d, t]) => `<li><span class="num">${esc(d)}</span><span>${esc(t)}</span></li>`).join("")}</ul></section>
+    <section class="sec"><h3 class="sec-h">날짜별 확인 사항</h3><ul class="remember">${T.remember.map(([d, t]) => `<li><span class="num">${esc(d)}</span><span>${esc(t)}</span></li>`).join("")}</ul></section>
     <section class="sec"><div class="warn"><span class="diamond"><span>!</span></span>${esc(T.finalCheck)}</div></section>
   </div>`);
 
   // 출처
   add("credits", "출처", "home", `<div class="wrap">
-    <p class="eyebrow">Credits</p><h2 class="h-page">사진과 자료 출처</h2>
-    <p class="lead">사진은 모두 위키미디어 공용의 자유 라이선스 사진이다. 지도는 Natural Earth(퍼블릭 도메인), 글꼴은 Pretendard·Hahmlet·Overpass(SIL OFL), 아이콘 일부는 Lucide(ISC).</p>
+    <h2 class="h-page">사진과 자료 출처</h2>
+    <p class="lead">사진은 위키미디어 공용의 자유 라이선스 자료를 사용했습니다. 지도는 Natural Earth, 글꼴은 Pretendard·Hahmlet·Overpass, 아이콘 일부는 Lucide를 사용했습니다.</p>
     <section class="sec"><ul class="credits">${Object.values(P).map((p) => `<li><b>${esc(p.name)}</b> — ${esc(p.artist || "작가 미상")} · ${esc(p.license)} · <a href="${esc(p.page)}" target="_blank" rel="noopener">원본</a></li>`).join("")}</ul></section>
   </div>`);
 
@@ -233,6 +281,80 @@
   const pager = $("#pager"), chips = $("#chips"), bar = $(".bar"), prog = $("#progress");
   pager.innerHTML = pages.map((p) => p.html).join("");
   chips.innerHTML = pages.map((p, i) => `<button class="chip r-${p.region}" data-go="${i}">${/^D\d/.test(p.label) ? `<b>${p.label}</b>` : p.label}</button>`).join("");
+
+  /* 현재 위치는 버튼을 누를 때만 확인한다. 위치는 저장하거나 전송하지 않는다. */
+  const reviewNumber = new Intl.NumberFormat("ko-KR");
+  function distanceMeters(aLat, aLon, bLat, bLon) {
+    const rad = Math.PI / 180, r = 6371000;
+    const dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
+    const s = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) ** 2;
+    return 2 * r * Math.asin(Math.sqrt(s));
+  }
+  const distanceBand = (m) => m <= 100 ? "100m 안" : m <= 300 ? "300m 안" : "1km 안";
+  const roundedDistance = (m) => m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50;
+  function nearbyRows(lat, lon) {
+    return NEARBY.map((place) => ({ ...place, distance: distanceMeters(lat, lon, place.lat, place.lon) }))
+      .filter((place) => place.distance <= 1000)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, 8);
+  }
+  const nearbyMapURL = (place) => mapSearchURL(place);
+  function renderNearby(section, position) {
+    const list = $("[data-nearby-list]", section), status = $("[data-nearby-status]", section);
+    const places = nearbyRows(position.coords.latitude, position.coords.longitude);
+    const accuracy = Math.max(10, Math.round(position.coords.accuracy / 10) * 10);
+    if (!places.length) {
+      list.hidden = true;
+      list.innerHTML = "";
+      status.textContent = "현재 위치에서 1km 이내에 추천 장소가 없습니다. 이동한 뒤 다시 확인해 주세요.";
+      return;
+    }
+    list.innerHTML = places.map((place) => {
+      const reviews = place.reviews ? `리뷰 ${reviewNumber.format(place.reviews)}개` : "";
+      const score = place.rating ? `★ ${place.rating.toFixed(1)}` : "";
+      const meta = [score, reviews].filter(Boolean).join(" · ");
+      const distance = roundedDistance(place.distance);
+      return `<li><a class="nearby-link" href="${esc(nearbyMapURL(place))}" target="_blank" rel="noopener" aria-label="${esc(place.name)}, 현재 위치에서 약 ${distance}미터, Google Maps 장소 정보 보기">
+        <span class="nearby-band">${distanceBand(place.distance)}</span>
+        <span class="nearby-copy"><span class="nearby-name">${esc(place.name)}</span>${meta ? `<span class="nearby-rating">${esc(meta)}</span>` : ""}<span class="nearby-note">${esc(place.kind)} · ${esc(place.note)}</span></span>
+        <span class="nearby-distance">약 ${reviewNumber.format(distance)}m${ic("out")}</span>
+      </a></li>`;
+    }).join("");
+    list.hidden = false;
+    status.textContent = `현재 위치 정확도 약 ±${reviewNumber.format(accuracy)}m · 가까운 장소 ${places.length}곳`;
+  }
+  function refreshNearby(section) {
+    const button = $("[data-nearby-refresh]", section), status = $("[data-nearby-status]", section);
+    if (!navigator.geolocation) {
+      status.textContent = "이 브라우저에서는 위치 기능을 사용할 수 없습니다.";
+      return;
+    }
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    status.textContent = "현재 위치를 확인하고 있어요.";
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        renderNearby(section, position);
+        button.disabled = false;
+        button.classList.remove("is-loading");
+        button.removeAttribute("aria-busy");
+      },
+      (error) => {
+        const messages = {
+          1: "위치 권한을 허용한 뒤 다시 눌러 주세요.",
+          2: "현재 위치를 확인할 수 없습니다. 잠시 후 다시 눌러 주세요.",
+          3: "위치 확인 시간이 초과되었습니다. 실외에서 다시 눌러 주세요.",
+        };
+        status.textContent = messages[error.code] || "현재 위치를 확인할 수 없습니다.";
+        button.disabled = false;
+        button.classList.remove("is-loading");
+        button.removeAttribute("aria-busy");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    );
+  }
+
   const chipEls = [...chips.children];
   const n = pages.length;
   let cur = -1;
@@ -263,6 +385,11 @@
     requestAnimationFrame(() => { ticking = false; setActive(Math.round(pager.scrollLeft / pager.clientWidth)); });
   }, { passive: true });
   document.addEventListener("click", (e) => {
+    const refresh = e.target.closest("[data-nearby-refresh]");
+    if (refresh) {
+      refreshNearby(refresh.closest("[data-nearby]"));
+      return;
+    }
     const b = e.target.closest("[data-go]");
     if (b) go(+b.dataset.go);
   });
@@ -307,7 +434,7 @@
     navigator.serviceWorker.register("sw.js").then(() => navigator.serviceWorker.ready).then(() => {
       let told = false;
       try { told = localStorage.getItem("syd-mel-offline") === "1"; localStorage.setItem("syd-mel-offline", "1"); } catch (_) { /* 무시 */ }
-      if (!told) toast("오프라인 저장 완료 — 이제 인터넷이 끊겨도 이 가이드가 열려요");
+      if (!told) toast("오프라인 저장이 끝났어요. 인터넷이 끊겨도 가이드를 열 수 있어요.");
     }).catch(() => { /* 등록 실패 시 온라인 전용으로 동작 */ });
   }
 
