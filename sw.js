@@ -1,5 +1,5 @@
 /* 서비스워커 원본 — tools/build_pwa.py 가 버전·목록을 채워 sw.js 를 만든다. 직접 sw.js 를 고치지 말 것. */
-const CACHE = "syd-mel-5064a2dc6e";
+const CACHE = "syd-mel-rain-ba7c522ee6";
 const RUNTIME = "syd-mel-runtime";
 const PRECACHE = [
  "./",

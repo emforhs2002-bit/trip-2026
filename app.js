@@ -246,6 +246,7 @@
         <p class="stay">${ic("hotel")}<span>오늘 밤 · ${mapText(d.stay, staySpot ? mapSearchURL(staySpot) : "", "stay-map")}</span></p>
         <div class="day-top">${d.warn ? `<div class="warn"><span class="diamond"><span>!</span></span>${esc(d.warn)}</div>` : ""}${stats}</div>
         <section class="sec"><h3 class="sec-h">주요 일정 <small>${d.highlights.length}곳</small></h3>${route}</section>
+        ${window.RAIN_PLANS?.[d.n] ? `<section class="sec rain-plan"><h3 class="sec-h">비 오는 날에는</h3><p>${esc(window.RAIN_PLANS[d.n])}</p><p class="foot">출발 전 운항·시설 운영·도로 통제 공지를 확인하세요. 천둥·번개, 침수, 강풍 시 야외 활동을 중단하고 안전한 실내에서 대기합니다.</p></section>` : ""}
         ${mosaic}${mini}${feat}${nearby}${sched}${links}
       </div></article>`);
   });
