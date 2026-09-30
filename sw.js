@@ -1,9 +1,10 @@
 /* 서비스워커 원본 — tools/build_pwa.py 가 버전·목록을 채워 sw.js 를 만든다. 직접 sw.js 를 고치지 말 것. */
-const CACHE = "syd-mel-rain-ba7c522ee6";
+const CACHE = "syd-mel-f15cde4611";
 const RUNTIME = "syd-mel-runtime";
 const PRECACHE = [
  "./",
  "index.html",
+ "shopping.html",
  "style.css",
  "app.js",
  "trip.js",
@@ -67,7 +68,22 @@ const PRECACHE = [
  "img/d8-shrine-S.webp",
  "img/d9-flinders-S.webp",
  "img/d9-hero-S.webp",
- "img/d9-laneway-S.webp"
+ "img/d9-laneway-S.webp",
+ "img/shop-dena-S.webp",
+ "img/shop-fish-S.webp",
+ "img/shop-gold-S.webp",
+ "img/shop-haigh-S.webp",
+ "img/shop-honey-S.webp",
+ "img/shop-jurlique-S.webp",
+ "img/shop-lanolin-S.webp",
+ "img/shop-liver-S.webp",
+ "img/shop-lutein-S.webp",
+ "img/shop-papaw-S.webp",
+ "img/shop-spray-S.webp",
+ "img/shop-t2-S.webp",
+ "img/shop-teatree-S.webp",
+ "img/shop-toothpaste-S.webp",
+ "img/shop-vitc-S.webp"
 ];
 
 self.addEventListener("install", (e) => {
@@ -89,7 +105,7 @@ self.addEventListener("fetch", (e) => {
 
   // 페이지 자체: 온라인이면 최신, 끊기면 저장본
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(() => caches.match("index.html")));
+    e.respondWith(fetch(req).catch(async () => (await caches.match(req, { ignoreSearch: true })) || caches.match("index.html")));
     return;
   }
 
