@@ -1,5 +1,5 @@
 /* 서비스워커 원본 — tools/build_pwa.py 가 버전·목록을 채워 sw.js 를 만든다. 직접 sw.js 를 고치지 말 것. */
-const CACHE = "syd-mel-f15cde4611";
+const CACHE = "syd-mel-7f7ca201c4";
 const RUNTIME = "syd-mel-runtime";
 const PRECACHE = [
  "./",
@@ -69,8 +69,10 @@ const PRECACHE = [
  "img/d9-flinders-S.webp",
  "img/d9-hero-S.webp",
  "img/d9-laneway-S.webp",
+ "img/shop-coq10-S.webp",
  "img/shop-dena-S.webp",
  "img/shop-fish-S.webp",
+ "img/shop-glucosamine-S.webp",
  "img/shop-gold-S.webp",
  "img/shop-haigh-S.webp",
  "img/shop-honey-S.webp",
@@ -78,12 +80,15 @@ const PRECACHE = [
  "img/shop-lanolin-S.webp",
  "img/shop-liver-S.webp",
  "img/shop-lutein-S.webp",
+ "img/shop-magnesium-S.webp",
  "img/shop-papaw-S.webp",
+ "img/shop-propolis-S.webp",
  "img/shop-spray-S.webp",
  "img/shop-t2-S.webp",
  "img/shop-teatree-S.webp",
  "img/shop-toothpaste-S.webp",
- "img/shop-vitc-S.webp"
+ "img/shop-vitc-S.webp",
+ "img/shop-vitd-S.webp"
 ];
 
 self.addEventListener("install", (e) => {
